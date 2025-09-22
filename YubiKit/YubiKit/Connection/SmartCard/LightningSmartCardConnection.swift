@@ -122,6 +122,7 @@ private actor LightningConnectionManager {
                 trace(message: "waiting for accessory to connect")
 
                 await EAAccessoryWrapper.shared.stopMonitoring()
+                await self.cancelPendingConnectionPromise()
 
                 trace(message: "stopped monitoring for accessories")
 
@@ -201,6 +202,17 @@ private actor LightningConnectionManager {
 
         await state.didCloseConnection.fulfill(nil)
         connectionState = nil
+    }
+
+    func cancelPendingConnectionPromise() async {
+        trace(message: "cancelling pending connection promise...")
+
+        if let promise = pendingConnectionPromise {
+            await promise.cancel(with: ConnectionError.noConnection)
+            self.pendingConnectionPromise = nil
+        }
+
+        trace(message: "cancelled pending connection promise")
     }
 }
 
