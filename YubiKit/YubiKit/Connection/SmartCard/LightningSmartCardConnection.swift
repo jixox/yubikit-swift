@@ -112,7 +112,10 @@ private actor LightningConnectionManager {
 
         return try await withThrowingTaskGroup(of: LightningConnectionID.self) { group in
             group.addTask { try await self.establishLightningConnection() }
-            group.addTask { try await Task.sleep(for: .seconds(Double(timeout))) }
+            group.addTask {
+                try await Task.sleep(for: .seconds(Double(timeout)))
+                throw ConnectionError.cancelled
+            }
 
             let winner = try await group.next()!
             group.cancelAll()
