@@ -29,7 +29,7 @@ public struct LightningSmartCardConnection: SmartCardConnection, Sendable {
     ///
     /// - Throws: ``ConnectionError.busy`` if there is already an active connection.
     public init() async throws {
-        accessoryConnectionID = try await LightningConnectionManager.shared.connect()
+        accessoryConnectionID = try await LightningConnectionManager.shared.connect(5)
     }
 
     /// Creates a connection to a YubiKey via Lightning port.
@@ -102,6 +102,25 @@ private actor LightningConnectionManager {
         async let task = establishLightningConnection()
 
         return try await task
+    }
+
+    func connect(timeout: uint8) async throws -> LightningConnectionID {
+        // If there is already a connection the caller must close the connection first.
+        if connectionState != nil || pendingConnectionPromise != nil {
+            throw ConnectionError.busy
+        }
+
+        return try await withThrowingTaskGroup(of: LightningConnectionID.self) { group in
+            group.addTask { try await self.establishLightningConnection() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(Double(timeout)))
+                throw ConnectionError.timeout
+            }
+
+            let winner = try await group.next()!
+            group.cancelAll()
+            return winner
+        }
     }
     
     func establishLightningConnection() async throws -> LightningConnectionID {
