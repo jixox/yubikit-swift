@@ -99,49 +99,51 @@ private actor LightningConnectionManager {
         }
 
         // Otherwise, create and store a new connection task.
-        let task = Task { () -> LightningConnectionID in
-            trace(message: "begin new connection task")
-
-            do {
-                // Close previous connection if it exists
-                if let connection = connectionState {
-                    await connection.didCloseConnection.fulfill(nil)
-                    self.connectionState = nil
-                }
-
-                // Create a promise to bridge the callback from EAAccessoryWrapper
-                let connectionPromise: Promise<LightningConnectionID> = .init()
-                self.pendingConnectionPromise = connectionPromise
-
-                // Connect to YubiKeys that are already plugged in
-                await EAAccessoryWrapper.shared.connectToCurrentDevices()
-
-                // Start monitoring for new accessories
-                await EAAccessoryWrapper.shared.startMonitoring()
-
-                trace(message: "waiting for accessory to connect")
-
-                await EAAccessoryWrapper.shared.stopMonitoring()
-                await self.cancelPendingConnectionPromise()
-
-                trace(message: "stopped monitoring for accessories")
-
-                // Await the promise which will be fulfilled by accessoryDidConnect()
-                let result = try await connectionPromise.value()
-                trace(message: "connection established")
-                self.pendingConnectionPromise = nil
-                return result
-            } catch {
-                trace(message: "connection failed: \(error.localizedDescription)")
-                // Cleanup on failure
-                self.pendingConnectionPromise = nil
-                self.connectionState = nil
-                await EAAccessoryWrapper.shared.stopMonitoring()
-                throw error
-            }
-        }
+        async let task = establishLightningConnection()
 
         return try await task.value
+    }
+    
+    func establishLightningConnection() async -> LightningConnectionID {
+        trace(message: "begin new connection task")
+
+        do {
+            // Close previous connection if it exists
+            if let connection = connectionState {
+                await connection.didCloseConnection.fulfill(nil)
+                self.connectionState = nil
+            }
+
+            // Create a promise to bridge the callback from EAAccessoryWrapper
+            let connectionPromise: Promise<LightningConnectionID> = .init()
+            self.pendingConnectionPromise = connectionPromise
+
+            // Connect to YubiKeys that are already plugged in
+            await EAAccessoryWrapper.shared.connectToCurrentDevices()
+
+            // Start monitoring for new accessories
+            await EAAccessoryWrapper.shared.startMonitoring()
+
+            trace(message: "waiting for accessory to connect")
+
+            await EAAccessoryWrapper.shared.stopMonitoring()
+            await self.cancelPendingConnectionPromise()
+
+            trace(message: "stopped monitoring for accessories")
+
+            // Await the promise which will be fulfilled by accessoryDidConnect()
+            let result = try await connectionPromise.value()
+            trace(message: "connection established")
+            self.pendingConnectionPromise = nil
+            return result
+        } catch {
+            trace(message: "connection failed: \(error.localizedDescription)")
+            // Cleanup on failure
+            self.pendingConnectionPromise = nil
+            self.connectionState = nil
+            await EAAccessoryWrapper.shared.stopMonitoring()
+            throw error
+        }
     }
 
     func transmit(request: Data, for connection: LightningSmartCardConnection) async throws -> Data {
