@@ -101,10 +101,10 @@ private actor LightningConnectionManager {
         // Otherwise, create and store a new connection task.
         async let task = establishLightningConnection()
 
-        return try await task.value
+        return try await task
     }
     
-    func establishLightningConnection() async -> LightningConnectionID {
+    func establishLightningConnection() async throws -> LightningConnectionID {
         trace(message: "begin new connection task")
 
         do {
