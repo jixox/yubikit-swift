@@ -41,6 +41,50 @@ public struct USBSmartCardConnection: Sendable {
         }
     }
 
+    /// Creates a new USB connection to the first available YubiKey.
+    ///
+    /// Waits for a YubiKey to be connected via USB and establishes a connection to it.
+    /// This method waits until a YubiKey becomes available.
+    ///
+    /// - Parameters:
+    ///     - timeout: The number of seconds to wait for a YubiKey to be connected before giving up.
+    /// - Throws: ``ConnectionError.busy`` if there is already an active connection.
+    public init(timeout: UInt8) async throws {
+        while true {
+
+            let slot: USBSmartCard.YubiKeyDevice? = try await withThrowingTaskGroup(of: USBSmartCard.YubiKeyDevice?.self) { group in
+                // 1) The timeout task
+                group.addTask {
+                    try await Task.sleep(for: .seconds(timeout))
+                    return nil
+                }
+
+                // 2) The available device task
+                group.addTask {
+                    while true {
+                        try Task.checkCancellation()               // fast-fail if already canceled
+                        if let slot = try await Self.availableDevices.first {
+                            return slot
+                        }
+                        try await Task.sleep(for: .seconds(0.5))
+                    }
+                }
+
+                // wait for the first to finish
+                let slot = try await group.next() ?? nil
+                group.cancelAll()
+                return slot
+            }
+
+            guard let slot else {
+                throw ConnectionError.cancelled
+            }
+
+            try await self.init(slot: slot)
+            return
+        }
+    }
+
     /// Creates a new USB connection to a specific YubiKey device.
     ///
     /// Establishes a connection to the specified YubiKey device slot.
@@ -62,11 +106,9 @@ public struct USBSmartCardConnection: Sendable {
     private var isConnected: Bool {
         get async throws { await SmartCardConnectionsManager.shared.isConnected(for: slot) }
     }
-
 }
 
 extension USBSmartCardConnection: SmartCardConnection {
-
     /// Creates a connection to the first available YubiKey smart card slot.
     ///
     /// > Warning: Connections must be explicitly closed using ``close(error:)``.
@@ -77,6 +119,20 @@ extension USBSmartCardConnection: SmartCardConnection {
     // @TraceScope
     public static func connection() async throws -> USBSmartCardConnection {
         try await USBSmartCardConnection()
+    }
+
+    /// Creates a connection to the first available YubiKey smart card slot.
+    ///
+    /// > Warning: Connections must be explicitly closed using ``close(error:)``.
+    /// Only one connection can exist at a time - attempting to create another will throw ``ConnectionError/busy``.
+    ///
+    /// - Parameters:
+    ///     - timeout: The number of seconds to wait for a YubiKey to be connected before giving up.
+    /// - Returns: A fully–established connection ready for APDU exchange.
+    /// - Throws: ``ConnectionError/busy`` if another connection is active, or other ConnectionError if no YubiKey is found or connection fails.
+    // @TraceScope
+    public static func connection(timeout: UInt8) async throws -> USBSmartCardConnection {
+        try await USBSmartCardConnection(timeout: timeout)
     }
 
     /// Creates a connection to a specific smart card slot.
