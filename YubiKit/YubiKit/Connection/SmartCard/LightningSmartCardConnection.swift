@@ -273,10 +273,10 @@ private actor EAAccessoryWrapper: NSObject, StreamDelegate {
             let connectionID: LightningConnectionID = accessory.connectionID
 
             Task {
-                trace(message: "accessory connected with ID \(connectionID)")
+                print("accessory connected with ID \(connectionID)")
                 await EAAccessoryWrapper.shared.setupConnection(id: connectionID, session: session)
 
-                trace(message: "session setup complete for ID \(connectionID)")
+                print("session setup complete for ID \(connectionID)")
                 await LightningConnectionManager.shared.accessoryDidConnect(connectionID: connectionID)
             }
         }
