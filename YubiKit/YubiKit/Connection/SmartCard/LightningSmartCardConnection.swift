@@ -127,7 +127,7 @@ private actor LightningConnectionManager {
         return try await task
     }
 
-    func connect(_ timeout: UInt8) async throws -> LightningConnectionID {
+    func connect(timeout: UInt8) async throws -> LightningConnectionID {
         // If there is already a connection the caller must close the connection first.
         if connectionState != nil || pendingConnectionPromise != nil {
             throw ConnectionError.busy
