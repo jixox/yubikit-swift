@@ -126,11 +126,6 @@ private actor LightningConnectionManager {
 
             trace(message: "waiting for accessory to connect")
 
-            await EAAccessoryWrapper.shared.stopMonitoring()
-            await self.cancelPendingConnectionPromise()
-
-            trace(message: "stopped monitoring for accessories")
-
             // Await the promise which will be fulfilled by accessoryDidConnect()
             let result = try await connectionPromise.value()
             trace(message: "connection established")
