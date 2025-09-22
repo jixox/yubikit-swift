@@ -126,11 +126,40 @@ private actor LightningConnectionManager {
 
             trace(message: "waiting for accessory to connect")
 
-            // Await the promise which will be fulfilled by accessoryDidConnect()
-            let result = try await connectionPromise.value()
-            trace(message: "connection established")
-            self.pendingConnectionPromise = nil
-            return result
+            defer {
+                Task { await EAAccessoryWrapper.shared.stopMonitoring() }
+                self.pendingConnectionPromise = nil
+            }
+
+            return try await withTaskCancellationHandler {
+                try await withThrowingTaskGroup(of: LightningConnectionID.self) { group in
+                    // 1) The real work: wait for the accessory connect signal
+                    group.addTask {
+                        try Task.checkCancellation()               // fast-fail if already canceled
+                        let id = try await connectionPromise.value()
+                        return id
+                    }
+
+                    // 2) Cancellation watcher: loops until parent is canceled
+                    group.addTask {
+                        // This task never returns normally; it only throws on cancellation.
+                        while true {
+                            try Task.checkCancellation()
+                            try await Task.sleep(for: .milliseconds(200))
+                        }
+                    }
+
+                    // First child that *returns* wins (normally that's the promise task).
+                    // If the parent is canceled, this `await` throws CancellationError.
+                    let winner = try await group.next()!
+                    group.cancelAll()
+                    trace(message: "connection established")
+                    return winner
+                }
+            } onCancel: {
+                trace(message: "connection task was cancelled")
+                Task { await self.cancelPendingConnectionPromise() }
+            }
         } catch {
             trace(message: "connection failed: \(error.localizedDescription)")
             // Cleanup on failure
