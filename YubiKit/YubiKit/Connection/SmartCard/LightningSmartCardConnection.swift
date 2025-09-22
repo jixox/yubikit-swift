@@ -119,6 +119,8 @@ private actor LightningConnectionManager {
                 // Start monitoring for new accessories
                 await EAAccessoryWrapper.shared.startMonitoring()
 
+                trace(message: "waiting for accessory to connect")
+
                 // Await the promise which will be fulfilled by accessoryDidConnect()
                 let result = try await connectionPromise.value()
                 trace(message: "connection established")
@@ -258,8 +260,6 @@ private actor EAAccessoryWrapper: NSObject, StreamDelegate {
         // Prevent duplicate observers
         guard connectObserver == nil && disconnectObserver == nil else { return }
 
-        trace(message: "registering for EAAccessory notifications")
-
         connectObserver = NotificationCenter.default.addObserver(
             forName: .EAAccessoryDidConnect,
             object: manager,
@@ -273,15 +273,10 @@ private actor EAAccessoryWrapper: NSObject, StreamDelegate {
             let connectionID: LightningConnectionID = accessory.connectionID
 
             Task {
-                print("accessory connected with ID \(connectionID)")
                 await EAAccessoryWrapper.shared.setupConnection(id: connectionID, session: session)
-
-                print("session setup complete for ID \(connectionID)")
                 await LightningConnectionManager.shared.accessoryDidConnect(connectionID: connectionID)
             }
         }
-
-        trace(message: "adding disconnect observer")
 
         disconnectObserver = NotificationCenter.default.addObserver(
             forName: .EAAccessoryDidDisconnect,
@@ -300,11 +295,7 @@ private actor EAAccessoryWrapper: NSObject, StreamDelegate {
             }
         }
 
-        trace(message: "registering for local notifications")
-
         EAAccessoryManager.shared().registerForLocalNotifications()
-
-        trace(message: "registration complete")
     }
 
     func stopMonitoring() {
