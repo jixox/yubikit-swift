@@ -29,7 +29,30 @@ public struct LightningSmartCardConnection: SmartCardConnection, Sendable {
     ///
     /// - Throws: ``ConnectionError.busy`` if there is already an active connection.
     public init() async throws {
-        accessoryConnectionID = try await LightningConnectionManager.shared.connect(5)
+        accessoryConnectionID = try await LightningConnectionManager.shared.connect()
+    }
+
+    /// Creates a new Lightning connection to a YubiKey.
+    ///
+    /// Waits for a YubiKey to be connected via Lightning port and establishes a connection.
+    /// - Parameters:
+    ///     - timeout: The number of seconds to wait for a YubiKey to be connected before giving up.
+    /// - Throws: ``ConnectionError.busy`` if there is already an active connection.
+    public init(timeout: UInt8) async throws {
+        accessoryConnectionID = try await LightningConnectionManager.shared.connect(timeout: timeout)
+    }
+
+    /// Creates a connection to a YubiKey via Lightning port within a specified timeout period.
+    ///
+    /// > Warning: Connections must be explicitly closed using ``close(error:)``.
+    /// Only one connection can exist at a time - attempting to create another will throw ``ConnectionError/busy``.
+    /// - Parameters:
+    ///     - timeout: The number of seconds to wait for a YubiKey to be connected before giving up.
+    /// - Returns: A fully–established connection ready for APDU exchange.
+    /// - Throws: ``ConnectionError.busy`` if there is already an active connection.
+    public static func connection(timeout: UInt8) async throws -> LightningSmartCardConnection {
+        trace(message: "requesting new connection with timeout of \(timeout)s")
+        return try await LightningSmartCardConnection(timeout: timeout)
     }
 
     /// Creates a connection to a YubiKey via Lightning port.
